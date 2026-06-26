@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 
 // ── 判定ロジック（モック・完全ローカル。外部APIには繋がない）──
 type Verdict = "safe" | "caution" | "danger";
-type Result = { verdict: Verdict; reasons: string[] };
+type Result = { verdict: Verdict; reasons: string[]; score: number; hitokoto: string };
 
 const FLAGS: { re: RegExp; reason: string }[] = [
   {
@@ -37,15 +37,19 @@ const CONFIRM = [
   "レビューの日付と内容をよく読む",
 ];
 
+const HITOKOTO: Record<Verdict, string> = {
+  safe: "大きな危険信号は見当たりません。それでも買う前に一度だけ確認すると、もっと安心です。",
+  caution: "いくつか気になる点があります。急がず、出品者と価格をもう一度たしかめましょう。",
+  danger: "危険信号が重なっています。今回は一度立ち止まって、別のお店も見てみるのがおすすめです。",
+};
+
 function judge(text: string): Result {
-  const reasons = FLAGS.filter((f) => f.re.test(text)).map((f) => f.reason).slice(0, 4);
-  let verdict: Verdict = "safe";
-  if (reasons.length >= 3) verdict = "danger";
-  else if (reasons.length >= 1) verdict = "caution";
-  if (verdict === "safe") {
-    reasons.push("目立った危険信号は見つかりませんでした。");
-  }
-  return { verdict, reasons };
+  const matched = FLAGS.filter((f) => f.re.test(text)).map((f) => f.reason);
+  const n = matched.length;
+  const verdict: Verdict = n >= 3 ? "danger" : n >= 1 ? "caution" : "safe";
+  const reasons = n === 0 ? ["目立った危険信号は見つかりませんでした。"] : matched.slice(0, 3);
+  const score = n === 0 ? 92 : Math.max(10, 100 - n * 22);
+  return { verdict, reasons, score, hitokoto: HITOKOTO[verdict] };
 }
 
 const VMETA: Record<Verdict, { label: string; emoji: string; bar: string; box: string; text: string }> = {
@@ -145,6 +149,23 @@ export default function App() {
               </div>
             </section>
 
+            {/* 安心度スコア */}
+            <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-100">
+              <div className="flex items-end justify-between">
+                <p className="text-[15px] font-bold text-ink">安心度スコア</p>
+                <p className={`text-[30px] font-bold leading-none ${VMETA[result.verdict].text}`}>
+                  {result.score}
+                  <span className="ml-0.5 text-[15px] text-sub">/100</span>
+                </p>
+              </div>
+              <div className="mt-2.5 h-2.5 w-full overflow-hidden rounded-full bg-gray-100">
+                <div
+                  className={`h-full rounded-full ${VMETA[result.verdict].bar}`}
+                  style={{ width: `${result.score}%` }}
+                />
+              </div>
+            </section>
+
             {/* 気になる点 */}
             <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-100">
               <p className="mb-3 text-[15px] font-bold text-ink">🔍 気になる点</p>
@@ -169,6 +190,12 @@ export default function App() {
                   </li>
                 ))}
               </ul>
+            </section>
+
+            {/* AIのひとこと */}
+            <section className="rounded-2xl bg-brand-soft p-4">
+              <p className="text-[14px] font-bold text-brand">🤖 AIのひとこと</p>
+              <p className="mt-1.5 text-[15px] leading-relaxed text-ink">{result.hitokoto}</p>
             </section>
           </>
         )}
